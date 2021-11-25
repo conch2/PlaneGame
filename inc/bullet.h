@@ -9,9 +9,6 @@
 #define BULLET_TYPE0 ROOT_IMAGES"/bullet1.png"
 #define BULLET_TYPE1 ROOT_IMAGES"/bullet2.png"
 
-extern int displayW, displayH;
-extern int GameState;
-
 class Bullet : public CollisionBox {
 public:
 	Bullet(int bulletType, SDL_Renderer *renderer, int x, int y);
@@ -24,6 +21,7 @@ public:
 	void mov();
 	void setSpeed(int moveTime, int m_distance);
 	void render();
+	void setType(int type);
 	
 	SDL_Renderer *m_renderer;
 	int m_bulletType;
@@ -39,7 +37,6 @@ public:
 	SDL_Rect m_rect;
 private:
 	friend class Player;
-	static uint NumOfObj;
 };
 
 #endif

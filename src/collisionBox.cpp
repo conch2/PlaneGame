@@ -51,6 +51,36 @@ int CollisionBox::detection(const SDL_Rect &rect) {
 	return 0;
 }
 
+int CollisionBox::detection(const SDL_Rect *boxs1, const SDL_Rect *boxs2, int boxsSize1, int boxsSize2) {
+	int minX, minY;
+	int maxX, maxY;
+	for (int i=0; i < boxsSize1; i++) {
+		for (int j=0; j < boxsSize2; j++) {
+			minX = MAX(boxs1[i].x, boxs2[j].x);
+			minY = MAX(boxs1[i].y, boxs2[j].y);
+			maxX = MAX(boxs1[i].x+boxs1[i].w, boxs2[j].x+boxs2[j].w);
+			maxY = MAX(boxs1[i].y+boxs1[i].h, boxs2[j].y+boxs2[j].h);
+			if (minX < maxX && minY < maxY) {
+				return 1;
+			}
+		}
+	}
+	return 0;
+}
+
+int CollisionBox::detection(const SDL_Rect &rect1, const SDL_Rect &rect2) {
+	int minX, minY;
+	int maxX, maxY;
+	minX = MAX(rect1.x, rect2.x);
+	minY = MAX(rect1.y, rect2.y);
+	maxX = MIN(rect1.x+rect1.w, rect2.x+rect2.w);
+	maxY = MIN(rect1.y+rect1.h, rect2.y+rect2.h);
+	if (minX < maxX && minY < maxY) {
+		return 1;
+	}
+	return 0;
+}
+
 #undef MIN
 #undef MAX
 

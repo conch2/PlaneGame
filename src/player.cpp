@@ -47,19 +47,9 @@ Player::Player(SDL_Renderer *renderer) : CollisionBox(), m_renderer(renderer) {
 	setBoxs(2);
 	resetBoxs();
 	// 子弹
-	m_bulletsSize = 10;
-	m_bullets = (Bullet*)SDL_malloc(sizeof(Bullet)*m_bulletsSize);
-	if (!m_bullets) {
-		fprintf(LogFile, "Player init bullet Error! %s\n", SDL_GetError());
-		PGerrno = -2;
-		return ;
-	}
-	m_defaultBulletConfig = new Bullet(0, m_renderer, 0, -1);
-	m_defaultBulletConfig->setSpeed(1, 2);
-	m_defaultBulletConfig->m_rect.y = -1 - m_defaultBulletConfig->m_rect.h;
-	for (int i=0; i < m_bulletsSize; i++) {
-		m_bullets[i] = *m_defaultBulletConfig;
-	}
+	m_bulletsSize = 0;
+	m_bulletType = 0;
+	m_bullets = NULL;
 	m_bulletSpeed = PLAYER_DEFAULT_FIRING_RATE;
 	m_textureIndex = 0;
 	m_lastSwapTime = SDL_GetTicks();
@@ -67,9 +57,6 @@ Player::Player(SDL_Renderer *renderer) : CollisionBox(), m_renderer(renderer) {
 }
 
 Player::~Player() {
-	if (m_defaultBulletConfig) {
-		delete m_defaultBulletConfig;
-	}
 	if (m_bullets) {
 		delete [] m_bullets;
 	}
@@ -135,7 +122,7 @@ void Player::crossBounds() {
 	} else if (m_rect.y + m_rect.h > displayH) {
 		m_rect.y = displayH - m_rect.h;
 	}
-	resetCBovsPosition();
+	resetCBoxsPosition();
 }
 
 void Player::mov(float dx, float dy) {
@@ -143,8 +130,7 @@ void Player::mov(float dx, float dy) {
 	m_rect.y += (int)((dy * (float)displayH) * m_movRatioY);
 	crossBounds();
 	// 重新设置碰撞箱位置
-	this->resetBoxXY(0, m_rect.x, m_rect.y + m_rect.h * 0.3);
-	resetBoxXY(1, m_rect.x + m_rect.w * 0.3, m_rect.y);
+	resetCBoxsPosition();
 }
 
 void Player::setSwapTime(Uint32 ttime) {
@@ -157,19 +143,32 @@ PlanePlayerState Player::getState() {
 
 void Player::bullet() {
 	int index;
+	int indexs[2] = {m_bulletsSize, m_bulletsSize};
 	Uint32 nowTick = SDL_GetTicks();
 	if (nowTick - m_timeOfLastShoot < m_bulletSpeed) {
 		return ;
 	}
 	m_timeOfLastShoot = nowTick;
 	for (index=0; index < m_bulletsSize; index++) {
-		if ((m_bullets[index].m_rect.y + m_bullets[index].m_rect.h) > 0) {
-			continue;
+		if ((m_bullets[index].m_rect.y + m_bullets[index].m_rect.h) < 0) {
+			if (m_bulletType == 1) {
+				if (indexs[0] > index) {
+					indexs[0] = index;
+				} else {
+					indexs[1] = index;
+					break;
+				}
+			} else {
+				break;
+			}
 		}
-		break;
 	}
 	if (index >= m_bulletsSize) {
-		m_bulletsSize += 1;
+		if (m_bulletType == 1 && indexs[1] != index) {
+			m_bulletsSize++;
+			indexs[1] = m_bulletsSize;
+		}
+		m_bulletsSize++;
 		void *newMemory = SDL_realloc(m_bullets, sizeof(Bullet)*m_bulletsSize);
 		if (!newMemory) {
 			m_bulletsSize -= 1;
@@ -178,23 +177,28 @@ void Player::bullet() {
 			return;
 		}
 		m_bullets = (Bullet*)newMemory;
-		m_bullets[index] = *m_defaultBulletConfig;
 	}
-	//m_bullets[index] = *m_defaultBulletConfig;
-	m_bullets[index].m_renderer = m_renderer;
-	m_bullets[index].m_texture = Bullet::texture1;
-	m_bullets[index].m_rect.x = m_rect.x + m_rect.w/2;
-	m_bullets[index].m_rect.y = this->m_rect.y + m_bullets[index].m_rect.h;
-	m_bullets[index].m_timeOfLastMove = nowTick;
-	//m_bullets[index].setSpeed(1, 2);
+	if (m_bulletType == 1) {
+		new (&m_bullets[indexs[0]])Bullet(m_bulletType, m_renderer, m_rect.x + m_rect.w * 0.2, m_rect.y);
+		new (&m_bullets[indexs[1]])Bullet(m_bulletType, m_renderer, m_rect.x + m_rect.w * 0.8, m_rect.y);
+		m_bullets[indexs[0]].setSpeed(1, 2);
+		m_bullets[indexs[1]].setSpeed(1, 2);
+	} else {
+		new (&m_bullets[index])Bullet(m_bulletType, m_renderer, m_rect.x + m_rect.w * 0.5, m_rect.y);
+		m_bullets[index].setSpeed(1, 2);
+	}
 }
 
 void Player::bulletMovs() {
 	for (int i=0; i < m_bulletsSize; i++) {
-		if ((m_bullets[i].m_rect.y + m_bullets[i].m_rect.h) > 0) {
+		if ((m_bullets[i].m_rect.y + m_bullets[i].m_rect.h) >= 0) {
 			m_bullets[i].mov();
 		}
 	}
+}
+
+void Player::swapBulletType(int bulletType) {
+	m_bulletType = bulletType;
 }
 
 void Player::setFiringRate(Uint32 rate) {
@@ -202,12 +206,12 @@ void Player::setFiringRate(Uint32 rate) {
 }
 
 void Player::resetBoxs() {
-	resetCBovsPosition();
-	resetBoxWH(0, m_rect.w, m_rect.h * 0.5);
-	resetBoxWH(1, m_rect.w * 0.4, m_rect.h * 0.3);
+	resetCBoxsPosition();
+	resetBoxWH(0, m_rect.w, m_rect.h * 0.3);
+	resetBoxWH(1, m_rect.w * 0.3, m_rect.h * 0.4);
 }
 
-void Player::resetCBovsPosition() {
-	resetBoxXY(0, m_rect.x, m_rect.y + m_rect.h * 0.3);
-	resetBoxXY(1, m_rect.x + m_rect.w * 0.3, m_rect.y);
+void Player::resetCBoxsPosition() {
+	resetBoxXY(0, m_rect.x, m_rect.y + m_rect.h * 0.4);
+	resetBoxXY(1, m_rect.x + m_rect.w * 0.37, m_rect.y);
 }

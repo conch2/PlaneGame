@@ -94,6 +94,45 @@ private:
 	static SDL_Texture **Textures;
 };
 
+class BigEnemy : public CollisionBox {
+public:
+	BigEnemy();
+	~BigEnemy();
+	void render();
+	void move();
+	void swapImage();
+	static void Init(SDL_Renderer *renderer);
+	static void Quit();
+private:
+	friend class PlaneGame;
+	friend class EnemyPlane;
+	Uint32 m_deathAnimationDuration;
+	EnemyState m_state;
+	SDL_Rect m_rect;
+	Uint32 m_lastMoveTime;
+	Uint32 m_timeOfDeath;
+	Uint32 m_moveSpeed;
+	Uint32 m_lastSwapTime;
+	int m_distance;
+	// 血量
+	int m_bloodVolume;
+	// 什么时候被打中
+	Uint32 m_whenWasItShot;
+	SDL_Texture *m_texture;
+	// 新生成的飞机血量
+	static int NewPlaneBloodVolume;
+	// 被打中时图片持续时长
+	static Uint32 DOAwhenShot;
+	static Uint32 MoveSpeed;
+	static int Distance;
+	static int imagesSize;
+	static int imageW, imageH;
+	static const char *images[];
+	static SDL_Renderer *Renderer;
+	static SDL_Texture **Textures;
+	static Uint32 SwapTime;
+};
+
 class EnemyPlane {
 public:
 	EnemyPlane(SDL_Renderer *renderer);
@@ -110,14 +149,16 @@ private:
 	int m_enemy1Size;
 	MidEnemy *m_midEnemy;
 	int m_midEnemySize;
+	BigEnemy *m_bigEnemy;
+	int m_bigEnemySize;
 	// 最后一次生成Enemy1的时间
 	Uint32 m_lastCreateEnemy1;
 	// 生成敌机1的间隔
 	Uint32 m_intervalOfNewEnemy1;
-	// 最后一次生成MidEnemy的时间
 	Uint32 m_lastCreateMidEnemy;
-	// 生成MidEnemy的间隔
 	Uint32 m_intervalOfNewMidEnemy;
+	Uint32 m_lastCreateBigEnemy;
+	Uint32 m_intervalOfNewBigEnemy;
 };
 
 #endif

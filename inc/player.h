@@ -51,7 +51,8 @@ public:
 	void setFiringRate(Uint32 rate);
 	void resetBoxs();
 	// 重新设置碰撞箱位置
-	void resetCBovsPosition();
+	void resetCBoxsPosition();
+	void swapBulletType(int bulletType);
 private:
 	friend class PlaneGame;
 	SDL_Renderer *m_renderer;
@@ -61,7 +62,7 @@ private:
 	int m_texturesSize;
 	// 当前使用图片的texture索引
 	int m_textureIndex;
-	// 
+	// 最后一次变换图片时间
 	Uint32 m_lastSwapTime;
 	// 移动系数，手指移动距离乘系数得到最终移动距离
 	// 默认为2.0f
@@ -71,13 +72,11 @@ private:
 	PlanePlayerState m_state;
 	// 子弹
 	Bullet *m_bullets;
-	// 默认的子弹配置，暨当子弹中的（某些）值等于这个实例时
-	// 则表示该实例是空实例
-	Bullet *m_defaultBulletConfig;
 	int m_bulletsSize;
 	Uint32 m_timeOfLastShoot;
 	// 射速
 	Uint32 m_bulletSpeed;
+	int m_bulletType;
 	static const char *images[];
 	static SDL_Texture **Textures;
 	static int imagesSize;

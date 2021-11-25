@@ -2,12 +2,10 @@
 
 int Bullet::imageW = 0;
 int Bullet::imageH = 0;
-uint Bullet::NumOfObj = 0;
 SDL_Texture *Bullet::texture1 = NULL;
 SDL_Texture *Bullet::texture2 = NULL;
 
 Bullet::Bullet(int bulletType, SDL_Renderer *renderer, int x, int y) : m_bulletType(bulletType) {
-	NumOfObj++;
 	m_renderer = renderer;
 	if (!texture1) {
 		Init(renderer);
@@ -29,13 +27,12 @@ Bullet::Bullet(int bulletType, SDL_Renderer *renderer, int x, int y) : m_bulletT
 }
 
 Bullet::Bullet(const Bullet &obj) : CollisionBox() {
-	NumOfObj++;
 	m_renderer = obj.m_renderer;
 	m_bulletType = obj.m_bulletType;
 	m_texture = obj.m_texture;
 	m_boxs = &m_rect;
-	m_rect.w = imageW;
-	m_rect.h = imageH;
+	m_rect.w = imageW  * ImageProportion;
+	m_rect.h = imageH  * ImageProportion;
 	m_rect.x = obj.m_rect.x;
 	m_rect.y = obj.m_rect.y;
 	m_timeOfLastMove = SDL_GetTicks();
@@ -44,10 +41,6 @@ Bullet::Bullet(const Bullet &obj) : CollisionBox() {
 Bullet::~Bullet() {
 	if (m_surface) {
 		SDL_FreeSurface(m_surface);
-	}
-	NumOfObj--;
-	if ((!NumOfObj) && (GameState = 2)) {
-		Quit();
 	}
 }
 
@@ -61,7 +54,7 @@ void Bullet::Init(SDL_Renderer *renderer) {
 	}
 	texture1 = SDL_CreateTextureFromSurface(renderer, surface);
 	SDL_FreeSurface(surface);
-	surface = IMG_LoadPNG_RW(SDL_RWFromFile(BULLET_TYPE0, "rb"));
+	surface = IMG_LoadPNG_RW(SDL_RWFromFile(BULLET_TYPE1, "rb"));
 	if (!surface) {
 		fprintf(LogFile, "Bullet begin load image Error! %s\n", IMG_GetError());
 		PGerrno = -2;
@@ -104,4 +97,18 @@ void Bullet::mov() {
 void Bullet::setSpeed(int moveTime, int distance) {
 	m_moveTime = moveTime;
 	m_distance = distance;
+}
+
+void Bullet::setType(int type) {
+	switch (type) {
+	case 0:
+		m_texture = texture1;
+		break;
+	case 1:
+		m_texture = texture2;
+		break;
+	default:
+		return;
+	}
+	this->m_bulletType = type;
 }

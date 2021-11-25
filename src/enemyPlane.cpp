@@ -38,15 +38,41 @@ int MidEnemy::Distance = 1;
 int MidEnemy::NewPlaneBloodVolume = 8;
 Uint32 MidEnemy::DOAwhenShot = 150;
 
+const char *BigEnemy::images[] = {
+	ROOT_IMAGES"/enemy3_n1.png",
+	ROOT_IMAGES"/enemy3_n2.png",
+	ROOT_IMAGES"/enemy3_hit.png",
+	ROOT_IMAGES"/enemy3_down1.png",
+	ROOT_IMAGES"/enemy3_down2.png",
+	ROOT_IMAGES"/enemy3_down3.png",
+	ROOT_IMAGES"/enemy3_down4.png",
+	ROOT_IMAGES"/enemy3_down5.png",
+	ROOT_IMAGES"/enemy3_down6.png"
+};
+int BigEnemy::imagesSize = sizeof(BigEnemy::images) / sizeof(char*);
+SDL_Texture **BigEnemy::Textures = NULL;
+SDL_Renderer *BigEnemy::Renderer = NULL;
+int BigEnemy::imageW = -1;
+int BigEnemy::imageH = -1;
+Uint32 BigEnemy::MoveSpeed = 8;
+int BigEnemy::Distance = 1;
+int BigEnemy::NewPlaneBloodVolume = 24;
+Uint32 BigEnemy::DOAwhenShot = 150;
+Uint32 BigEnemy::SwapTime = 150;
+
 EnemyPlane::EnemyPlane(SDL_Renderer *renderer) {
-	m_intervalOfNewEnemy1 = 300;
-	m_intervalOfNewMidEnemy = 5000;
 	m_enemy1Size = 0;
 	m_enemy1 = NULL;
 	m_midEnemy = NULL;
 	m_midEnemySize = 0;
+	m_bigEnemy = NULL;
+	m_bigEnemySize = 0;
 	m_lastCreateEnemy1 = SDL_GetTicks();
 	m_lastCreateMidEnemy = SDL_GetTicks();
+	m_lastCreateBigEnemy = SDL_GetTicks();
+	m_intervalOfNewEnemy1 = 300;
+	m_intervalOfNewMidEnemy = 5E+3;
+	m_intervalOfNewBigEnemy = 10000;
 }
 
 EnemyPlane::~EnemyPlane() {
@@ -56,16 +82,21 @@ EnemyPlane::~EnemyPlane() {
 	if (m_midEnemy) {
 		SDL_free(m_midEnemy);
 	}
+	if (m_bigEnemy) {
+		SDL_free(m_bigEnemy);
+	}
 }
 
 void EnemyPlane::Init(SDL_Renderer *renderer) {
 	Enemy1::Init(renderer);
 	MidEnemy::Init(renderer);
+	BigEnemy::Init(renderer);
 }
 
 void EnemyPlane::Quit() {
 	Enemy1::Quit();
 	MidEnemy::Quit();
+	BigEnemy::Quit();
 }
 
 void EnemyPlane::playing() {
@@ -124,21 +155,19 @@ void EnemyPlane::playing() {
 			return;
 		}
 		m_enemy1 = (Enemy1*)newE;
-		for (int i=0; i < u; i++) {
-			new (&m_enemy1[tr+i])Enemy1();
-		}
+		new (&m_enemy1[tr])Enemy1();
 	}
 	nowT = SDL_GetTicks();
 	u = nowT - m_lastCreateMidEnemy;
 	u /= m_intervalOfNewMidEnemy;
 	for (tr=0; tr < m_midEnemySize; tr++) {
-		m_midEnemy[tr].m_boxs = &m_midEnemy[tr].m_rect;
+		//m_midEnemy[tr].m_boxs = &m_midEnemy[tr].m_rect;
 		if (m_midEnemy[tr].m_state == ENEMY_ALIVE) {
 			m_midEnemy[tr].move();
 		}
 		else if (m_midEnemy[tr].m_state == ENEMY_IN_DEATH) {
 			int num = (SDL_GetTicks() - m_midEnemy[tr].m_timeOfDeath) / m_midEnemy[tr].m_deathAnimationDuration;
-			num += 2;
+			num += 3;
 			if (num >= MidEnemy::imagesSize) {
 				m_midEnemy[tr].m_state = ENEMY_DEATH;
 			} else 
@@ -180,14 +209,71 @@ void EnemyPlane::playing() {
 			return;
 		}
 		m_midEnemy = (MidEnemy*)newE;
-		for (int i=0; i < u; i++) {
-			new (&m_midEnemy[tr+i])MidEnemy();
+		new (&m_midEnemy[tr])MidEnemy();
+	}
+	nowT = SDL_GetTicks();
+	u = nowT - m_lastCreateBigEnemy;
+	u /= m_intervalOfNewBigEnemy;
+	int num;
+	for (tr=0; tr < m_bigEnemySize; tr++) {
+		switch (m_bigEnemy[tr].m_state) {
+		case ENEMY_ALIVE:
+			m_bigEnemy[tr].move();
+			m_bigEnemy[tr].swapImage();
+			break;
+		case ENEMY_SHOT:
+			m_bigEnemy[tr].move();
+			if (BigEnemy::DOAwhenShot + m_bigEnemy[tr].m_whenWasItShot <= SDL_GetTicks()) {
+				m_bigEnemy[tr].m_state = ENEMY_ALIVE;
+				m_bigEnemy[tr].m_texture = BigEnemy::Textures[0];
+			}
+			break;
+		case ENEMY_IN_DEATH:
+			num = (SDL_GetTicks() - m_bigEnemy[tr].m_timeOfDeath) / m_bigEnemy[tr].m_deathAnimationDuration;
+			num += 2;
+			if (num >= BigEnemy::imagesSize) {
+				m_bigEnemy[tr].m_state = ENEMY_DEATH;
+			} else {
+				m_bigEnemy[tr].m_texture = BigEnemy::Textures[num];
+			}
+			break;
+		case ENEMY_DEATH:
+			if (u) {
+				u = 0;
+				nowT = SDL_GetTicks();
+				m_lastCreateBigEnemy = nowT;
+				m_bigEnemy[tr].m_lastMoveTime = nowT;
+				std::srand(clock());
+				m_bigEnemy[tr].m_texture = BigEnemy::Textures[0];
+				m_bigEnemy[tr].m_rect.x = std::rand() % (displayW - m_bigEnemy[tr].m_rect.w);
+				m_bigEnemy[tr].m_rect.y = 0 - m_bigEnemy[tr].m_rect.h;
+				m_bigEnemy[tr].m_state = ENEMY_ALIVE;
+				m_bigEnemy[tr].m_moveSpeed = BigEnemy::MoveSpeed;
+				m_bigEnemy[tr].m_distance = BigEnemy::Distance;
+				m_bigEnemy[tr].m_bloodVolume = BigEnemy::NewPlaneBloodVolume;
+			}
+			break;
 		}
+	}
+	if (u && tr == m_bigEnemySize) {
+		m_bigEnemySize += u;
+		void *newE = SDL_realloc(m_bigEnemy, sizeof(BigEnemy)*m_bigEnemySize);
+		if (!newE) {
+			fprintf(LogFile, "EnemyPlane Cannot new object!\n");
+			write(LogFile->_file, "h\n", 2);
+			PGerrno = -2;
+			return;
+		}
+		m_bigEnemy = (BigEnemy*)newE;
+		new (&m_bigEnemy[tr])BigEnemy();
 	}
 }
 
 void EnemyPlane::render() {
 	int i;
+	for (i=0; i < m_bigEnemySize; i++) {
+		m_bigEnemy[i].render();
+	}
 	for (i=0; i < m_midEnemySize; i++) {
 		m_midEnemy[i].render();
 	}
@@ -199,14 +285,17 @@ void EnemyPlane::render() {
 void EnemyPlane::rePlay() {
 	m_lastCreateEnemy1 = SDL_GetTicks();
 	m_lastCreateMidEnemy = SDL_GetTicks();
+	m_lastCreateBigEnemy = SDL_GetTicks();
 	m_intervalOfNewEnemy1 = 300;
 	if (m_enemy1) SDL_free(m_enemy1);
 	if (m_midEnemy) SDL_free(m_midEnemy);
-	//delete[] m_enemy1;
+	if (m_bigEnemy) SDL_free(m_bigEnemy);
 	m_enemy1 = NULL;
 	m_midEnemy = NULL;
+	m_bigEnemy = NULL;
 	m_enemy1Size = 0;
 	m_midEnemySize = 0;
+	m_bigEnemySize = 0;
 }
 
 int EnemyPlane::playerCollision(Player &player) {
@@ -221,11 +310,17 @@ int EnemyPlane::playerCollision(Player &player) {
 		}
 	}
 	for (int i=0; i < m_midEnemySize; i++) {
-		if (m_midEnemy[i].m_state != ENEMY_ALIVE) {
-			continue;
+		if (m_midEnemy[i].m_state == ENEMY_ALIVE || m_midEnemy[i].m_state == ENEMY_SHOT) {
+			if (m_midEnemy[i].detection(playerBoxs, playerBoxsSize)) {
+				return 1;
+			}
 		}
-		if (m_midEnemy[i].detection(playerBoxs, playerBoxsSize)) {
-			return 1;
+	}
+	for (int i=0; i < m_bigEnemySize; i++) {
+		if (m_bigEnemy[i].m_state == ENEMY_ALIVE || m_bigEnemy[i].m_state == ENEMY_SHOT) {
+			if (m_bigEnemy[i].detection(playerBoxs, playerBoxsSize)) {
+				return 1;
+			}
 		}
 	}
 	return 0;
@@ -241,8 +336,6 @@ Enemy1::Enemy1() {
 	m_texture = Textures[0];
 	m_rect.w = imageW * ImageProportion;
 	m_rect.h = imageH * ImageProportion;
-	m_rect.x = 0;
-	m_rect.y = displayH;
 	m_boxs = &m_rect;
 	m_boxsSize = 1;
 	m_moveSpeed = MoveSpeed;
@@ -286,16 +379,7 @@ void Enemy1::Init(SDL_Renderer *renderer) {
 		return;
 	}
 	SDL_memset(Textures, 0, sizeof(SDL_Texture*)*imagesSize);
-	SDL_RWops *rwops = SDL_RWFromFile(images[0], "rb");
-	SDL_Surface *surface = IMG_LoadPNG_RW(rwops);
-	imageW = surface->w;
-	imageH = surface->h;
-	//Textures[0] = SDL_CreateTextureFromSurface(renderer, surface);
-	SDL_FreeRW(rwops);
-	SDL_FreeSurface(surface);
 	for (int i=0; i < imagesSize; i++) {
-		//std::string str = images[i];
-		//write(LogFile->_file, str.c_str(), str.length());
 		Textures[i] = IMG_LoadTexture(Renderer, images[i]);
 		if (!Textures[i]) {
 			fprintf(LogFile, "Enemy1 load image Error! %s\n", IMG_GetError());
@@ -303,6 +387,7 @@ void Enemy1::Init(SDL_Renderer *renderer) {
 			return ;
 		}
 	}
+	SDL_QueryTexture(Textures[0], NULL, NULL, &imageW, &imageH);
 }
 
 void Enemy1::Quit() {
@@ -349,12 +434,6 @@ void MidEnemy::Init(SDL_Renderer *renderer) {
 		return;
 	}
 	SDL_memset(Textures, 0, sizeof(SDL_Texture*)*imagesSize);
-	SDL_RWops *rwops = SDL_RWFromFile(images[0], "rb");
-	SDL_Surface *surface = IMG_LoadPNG_RW(rwops);
-	imageW = surface->w;
-	imageH = surface->h;
-	SDL_FreeRW(rwops);
-	SDL_FreeSurface(surface);
 	for (int i=0; i < imagesSize; i++) {
 		Textures[i] = IMG_LoadTexture(Renderer, images[i]);
 		if (!Textures[i]) {
@@ -363,6 +442,7 @@ void MidEnemy::Init(SDL_Renderer *renderer) {
 			return ;
 		}
 	}
+	SDL_QueryTexture(Textures[0], NULL, NULL, &imageW, &imageH);
 }
 
 void MidEnemy::Quit() {
@@ -410,4 +490,100 @@ void MidEnemy::move() {
 		m_state = ENEMY_DEATH;
 	}
 	m_lastMoveTime = nowT;
+	m_boxs = &m_rect;
+}
+
+BigEnemy::BigEnemy() {
+	m_state = ENEMY_DEATH;
+	m_deathAnimationDuration = 200;
+	m_rect.w = imageW * ImageProportion;
+	m_rect.h = imageH * ImageProportion;
+	m_boxs = &m_rect;
+	m_boxsSize = 1;
+	m_texture = Textures[0];
+	m_lastSwapTime = SDL_GetTicks();
+	m_bloodVolume = NewPlaneBloodVolume;
+}
+
+BigEnemy::~BigEnemy() {
+	
+}
+
+void BigEnemy::Init(SDL_Renderer *renderer) {
+	Renderer = renderer;
+	Textures = (SDL_Texture**)SDL_malloc(sizeof(SDL_Texture*)*imagesSize);
+	if (!Textures) {
+		fprintf(LogFile, "BigEnemy malloc Error! %s\n", SDL_GetError());
+		PGerrno = -2;
+		return;
+	}
+	SDL_memset(Textures, 0, sizeof(SDL_Texture*)*imagesSize);
+	for (int i=0; i < imagesSize; i++) {
+		Textures[i] = IMG_LoadTexture(Renderer, images[i]);
+		if (!Textures[i]) {
+			fprintf(LogFile, "BigEnemy load image Error! %s\n", IMG_GetError());
+			PGerrno = -2;
+			return ;
+		}
+	}
+	SDL_QueryTexture(Textures[0], NULL, NULL, &imageW, &imageH);
+}
+
+void BigEnemy::Quit() {
+	if (!Textures) {
+		for (int i=0; i < imagesSize; i++) {
+			SDL_DestroyTexture(Textures[i]);
+		}
+		SDL_free(Textures);
+		Textures = NULL;
+	}
+}
+
+void BigEnemy::render() {
+	if (m_state == ENEMY_DEATH) {
+		return;
+	}
+	SDL_RenderCopy(Renderer, m_texture, NULL, &m_rect);
+	if (m_state == ENEMY_IN_DEATH) {
+		return;
+	}
+	// 绘制血量
+	SDL_Rect blood;
+	float bloodVolumeF = (float)m_bloodVolume / NewPlaneBloodVolume;
+	blood.h = m_rect.h * 0.03;
+	blood.x = m_rect.x;
+	blood.y = m_rect.y - blood.h;
+	blood.w = m_rect.w * bloodVolumeF;
+	if (bloodVolumeF < 0.3) {
+		SDL_SetRenderDrawColor(Renderer, 0xFF, 0x0, 0x0, 0xFF);
+	} else {
+		SDL_SetRenderDrawColor(Renderer, 0x0, 0xFF, 0x0, 0xFF);
+	}
+	SDL_RenderFillRect(Renderer, &blood);
+	blood.w = m_rect.w;
+	SDL_SetRenderDrawColor(Renderer, 0, 0x0, 0x0, 0xFF);
+	SDL_RenderDrawRect(Renderer, &blood);
+}
+
+void BigEnemy::move() {
+	Uint32 nowT = SDL_GetTicks();
+	if (nowT - m_lastMoveTime < m_moveSpeed) {
+		return;
+	}
+	m_rect.y += m_distance * ((nowT - m_lastMoveTime) / m_moveSpeed);
+	if (m_rect.y > displayH) {
+		m_state = ENEMY_DEATH;
+	}
+	m_lastMoveTime = nowT;
+	m_boxs = &m_rect;
+}
+
+void BigEnemy::swapImage() {
+	Uint32 nowT = SDL_GetTicks();
+	if (m_lastSwapTime + SwapTime <= nowT) {
+		m_lastSwapTime = nowT;
+		if (m_state == ENEMY_ALIVE) {
+			m_texture = (m_texture == BigEnemy::Textures[0]) ? BigEnemy::Textures[1] : BigEnemy::Textures[0];
+		}
+	}
 }

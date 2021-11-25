@@ -5,6 +5,7 @@ PlaneGame::PlaneGame() : m_window(NULL), m_renderer(NULL) {
 	m_enemy = NULL;
 	m_state = START;
 	m_player = NULL;
+	m_supply = NULL;
 	m_background = NULL;
 	m_score = 0;
 	m_level = 3;
@@ -25,6 +26,9 @@ PlaneGame::~PlaneGame() {
 	}
 	if (m_player) {
 		delete m_player;
+	}
+	if (m_supply) {
+		delete m_supply;
 	}
 	Bullet::Quit();
 	if (m_renderer) {
@@ -97,41 +101,12 @@ int PlaneGame::init() {
 	m_levelRect.y = displayH - m_levelRect.h;
 	SDL_FreeRW(src);
 	SDL_FreeSurface(surface);
-	m_player->crossBounds();
 	// 补给相关
-	m_intervalOfSupply = 30E+3;
-	m_timeOfLastSupply = SDL_GetTicks();
-	m_fullScreenBomb = 0;
-	src = SDL_RWFromFile(BOMB_IMAGE, "rb");
-	surface = IMG_LoadPNG_RW(src);
-	if (surface == NULL) {
-		fprintf(LogFile, "Load bomb image Error! %s\n", IMG_GetError());
-		PGerrno = -2;
-		return -2;
-	}
-	m_bombTexture = SDL_CreateTextureFromSurface(m_renderer, surface);
-	m_bombImageW = surface->w;
-	m_bombImageH = surface->h;
-	m_bombRect.w = m_bombImageW * ImageProportion;
-	m_bombRect.h = m_bombImageH * ImageProportion;
-	m_bombRect.x = 0;
-	m_bombRect.y = displayH - m_bombRect.h;
-	SDL_FreeRW(src);
-	SDL_FreeSurface(surface);
-	src = SDL_RWFromFile(BOMB_SUPPLY_IMAGE, "rb");
-	surface = IMG_LoadPNG_RW(src);
-	if (surface == NULL) {
-		fprintf(LogFile, "Load bomb supply image Error! %s\n", IMG_GetError());
-		PGerrno = -2;
-		return -2;
-	}
-	m_bombSupplyTexture = SDL_CreateTextureFromSurface(m_renderer, surface);
-	m_bombSupplyImageW = surface->w;
-	m_bombSupplyImageH = surface->h;
-	m_bombSupplyRect.w = m_bombSupplyImageW * ImageProportion;
-	m_bombSupplyRect.h = m_bombSupplyImageH * ImageProportion;
-	SDL_FreeRW(src);
-	SDL_FreeSurface(surface);
+	m_supply = new Supply(m_renderer);
+	m_supply->setFont(m_font);
+	m_supply->setNumFSB(0);
+	m_player->crossBounds();
+	m_bulletSupplyToTime = 0;
 	return PGerrno;
 }
 
@@ -139,7 +114,6 @@ void PlaneGame::mainLoop() {
 	SDL_Event event;
 	
 	while (PGerrno >= 0) {
-	//while (true) {
 		// Event
 		while (SDL_PollEvent(&event)) {
 			switch(event.type) {
@@ -166,6 +140,16 @@ void PlaneGame::mainLoop() {
 						break;
 					}
 					rePlay();
+				} else if (m_state == PLAYING) {
+					int fingerX = displayW * event.tfinger.x;
+					int fingerY = displayH * event.tfinger.y;
+					if (fingerX >= m_supply->m_bombRect.x && fingerX <= (m_supply->m_bombRect.x+m_supply->m_bombRect.w)
+						&& fingerY >= m_supply->m_bombRect.y && fingerY <= (m_supply->m_bombRect.y+m_supply->m_bombRect.h)) {
+						if (m_supply->m_numOfFullScreenBomb) {
+							m_supply->setNumFSB(m_supply->getNumFSB()-1);
+							destroyAllEnemy();
+						}
+					}
 				}
 				break;
 			case SDL_FINGERMOTION:
@@ -192,7 +176,10 @@ void PlaneGame::mainLoop() {
 			// 碰撞检测
 			scanCollision();
 			// 补给
-			supply();
+			m_supply->playing();
+			if (m_bulletSupplyToTime < SDL_GetTicks()) {
+				m_player->m_bulletType = 0;
+			}
 		}
 	}
 }
@@ -230,8 +217,7 @@ void PlaneGame::render() {
 		break;
 	case PLAYING:
 		renderLevel();
-		renderBomb();
-		renderSupply();
+		m_supply->render();
 		m_enemy->render();
 		m_player->render();
 		buffStream << "分数：" << m_score;
@@ -272,28 +258,15 @@ void PlaneGame::renderLevel() {
 	SDL_RenderCopy(m_renderer, m_levelTexture, NULL, &m_levelRect);
 }
 
-void PlaneGame::renderBomb() {
-	SDL_RenderCopy(m_renderer, m_bombTexture, NULL, &m_bombRect);
-}
-
-void PlaneGame::renderSupply() {
-	if (m_bombSupplyRect.y >= displayH) {
-		return;
-	}
-	SDL_RenderCopy(m_renderer, m_bombSupplyTexture, NULL, &m_bombSupplyRect);
-	m_bombSupplyRect.y += 1;
-}
-
 void PlaneGame::scanCollision() {
 	// 玩家与敌机检查
 	if (m_enemy->playerCollision(*m_player)) {
 		switch (m_player->m_state) {
 		case PLAYER_LIVING:
-			if (!m_level) {
+			if (!--m_level) {
 				m_player->m_state = PLAYER_DYING;
 				m_state = PGEND;
 			} else {
-				m_level--;
 				m_playerLastDeathT = SDL_GetTicks();
 				m_player->m_state = PLAYER_INVINCIBLE;
 			}
@@ -312,7 +285,7 @@ void PlaneGame::scanCollision() {
 		int &rectY = bullet.m_rect.y;
 		const int &rectH = bullet.m_rect.h;
 		// 超出屏幕，不进行判断
-		if (rectY + rectH <= 0) {
+		if (rectY + rectH < 0) {
 			continue;
 		}
 		for (int j=0; j < m_enemy->m_enemy1Size; j++) {
@@ -321,12 +294,15 @@ void PlaneGame::scanCollision() {
 				continue;
 			}
 			if (enemy1.detection(bullet.m_rect)) {
-				rectY = 0 - rectH;
+				rectY = 0 - rectH - 10;
 				enemy1.m_state = ENEMY_IN_DEATH;
 				enemy1.m_timeOfDeath = SDL_GetTicks();
 				m_score++;
 				break;
 			}
+		}
+		if (rectY + rectH < 0) {
+			continue;
 		}
 		for (int j=0; j < m_enemy->m_midEnemySize; j++) {
 			MidEnemy &midEnemy = m_enemy->m_midEnemy[j];
@@ -335,7 +311,7 @@ void PlaneGame::scanCollision() {
 			}
 			if (midEnemy.detection(bullet.m_rect)) {
 				// 移除子弹
-				rectY = 0 - rectH;
+				rectY = 0 - rectH - 10;
 				midEnemy.m_bloodVolume--;
 				if (midEnemy.m_bloodVolume) {
 					// 血量不空
@@ -351,18 +327,45 @@ void PlaneGame::scanCollision() {
 				break;
 			}
 		}
+		if (rectY + rectH < 0) {
+			continue;
+		}
+		for (int j=0; j < m_enemy->m_bigEnemySize; j++) {
+			BigEnemy &bigEnemy = m_enemy->m_bigEnemy[j];
+			if (bigEnemy.m_state == ENEMY_IN_DEATH || bigEnemy.m_state == ENEMY_DEATH) {
+				continue;
+			}
+			if (bigEnemy.detection(bullet.m_rect)) {
+				rectY = 0 - rectH - 10;
+				bigEnemy.m_bloodVolume--;
+				if (bigEnemy.m_bloodVolume) {
+					bigEnemy.m_texture = BigEnemy::Textures[2];
+					bigEnemy.m_state = ENEMY_SHOT;
+					bigEnemy.m_whenWasItShot = SDL_GetTicks();
+					break;
+				}
+				bigEnemy.m_state = ENEMY_IN_DEATH;
+				bigEnemy.m_timeOfDeath = SDL_GetTicks();
+				m_score += 30;
+				break;
+			}
+		}
 	}
-}
-
-void PlaneGame::supply() {
-	Uint32 nowT = SDL_GetTicks();
-	if (nowT - m_timeOfLastSupply < m_intervalOfSupply) {
-		return ;
+	// 玩家与补给
+	for (int i=0; i < m_supply->m_renderTable->size(); i++) {
+		SDL_Rect &supplyRect = (*m_supply->m_renderTable)[i].r;
+		if (m_player->detection(supplyRect)) {
+			if ((*m_supply->m_renderTable)[i].t == m_supply->m_bombSupplyTexture) {
+				m_supply->setNumFSB(m_supply->getNumFSB()+1);
+			} else if ((*m_supply->m_renderTable)[i].t == m_supply->m_bulletSupplyTexture) {
+				m_player->m_bulletType = 1;
+				m_bulletSupplyToTime = SDL_GetTicks() + 18E+3;
+			}
+			auto vi = m_supply->m_renderTable->begin();
+			vi += i;
+			m_supply->m_renderTable->erase(vi);
+		}
 	}
-	m_timeOfLastSupply = nowT;
-	std::srand(time(NULL));
-	m_bombSupplyRect.x = std::rand() % (displayW - m_bombSupplyRect.w);
-	m_bombSupplyRect.y = 0 - m_bombSupplyRect.h;
 }
 
 void PlaneGame::rePlay() {
@@ -375,6 +378,37 @@ void PlaneGame::rePlay() {
 	m_player->m_state = PLAYER_LIVING;
 	m_player->setFiringRate(PLAYER_DEFAULT_FIRING_RATE);
 	m_player->resetBoxs();
+	m_supply->m_timeOfLastSupply = SDL_GetTicks();
+	m_supply->setNumFSB(0);
+	m_supply->m_renderTable->clear();
+	m_bulletSupplyToTime = 0;
+}
+
+void PlaneGame::destroyAllEnemy() {
+	Uint32 nowT = SDL_GetTicks();
+	for (int i=0; i < m_enemy->m_enemy1Size; i++) {
+		if (m_enemy->m_enemy1[i].m_state == ENEMY_ALIVE) {
+			m_enemy->m_enemy1[i].m_state = ENEMY_IN_DEATH;
+			m_enemy->m_enemy1[i].m_timeOfDeath = nowT;
+			m_score++;
+		}
+	}
+	for (int i=0; i < m_enemy->m_midEnemySize; i++) {
+		if (m_enemy->m_midEnemy[i].m_state == ENEMY_ALIVE
+			|| m_enemy->m_midEnemy[i].m_state == ENEMY_SHOT) {
+			m_enemy->m_midEnemy[i].m_state = ENEMY_IN_DEATH;
+			m_enemy->m_midEnemy[i].m_timeOfDeath = nowT;
+			m_score += 10;
+		}
+	}
+	for (int i=0; i < m_enemy->m_bigEnemySize; i++) {
+		if (m_enemy->m_bigEnemy[i].m_state == ENEMY_ALIVE
+			|| m_enemy->m_bigEnemy[i].m_state == ENEMY_SHOT) {
+			m_enemy->m_bigEnemy[i].m_state = ENEMY_IN_DEATH;
+			m_enemy->m_bigEnemy[i].m_timeOfDeath = nowT;
+			m_score += 20;
+		}
+	}
 }
 
 void PlaneGame::showCollisionBoxs() {
@@ -393,5 +427,11 @@ void PlaneGame::showCollisionBoxs() {
 		for (int j=0; j < m_enemy->m_midEnemy[i].m_boxsSize; j++) {
 			SDL_RenderDrawRect(m_renderer, &m_enemy->m_midEnemy[i].m_boxs[j]);
 		}
+	}
+	for (int i=0; i < m_supply->m_renderTable->size(); i++) {
+		SDL_RenderDrawRect(m_renderer, &(*m_supply->m_renderTable)[i].r);
+	}
+	for (int i=0; i < m_enemy->m_bigEnemySize; i++) {
+		SDL_RenderDrawRect(m_renderer, &m_enemy->m_bigEnemy[i].m_rect);
 	}
 }

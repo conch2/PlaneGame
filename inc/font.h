@@ -13,6 +13,8 @@ public:
 	Font(SDL_Renderer *renderer);
 	~Font();
 	int addFont(const char *file, int ptsize);
+	TTF_Font *getFont(int index);
+	int getFontSize();
 	void renderFont(int index, const char *str, SDL_Color fg, int x, int y);
 	void renderFont(int index, std::string &str, SDL_Color fg, int x, int y);
 private:

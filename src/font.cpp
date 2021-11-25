@@ -85,3 +85,14 @@ void Font::renderFont(int index, std::string &str, SDL_Color fg, int x, int y) {
 	rect.y = y;
 	SDL_RenderCopy(m_renderer, m_texture, NULL, &rect);
 }
+
+TTF_Font *Font::getFont(int index) {
+	if (index >= m_fontSize) {
+		return NULL;
+	}
+	return (*m_fonts)[index];
+}
+
+int Font::getFontSize() {
+	return m_fontSize;
+}

@@ -6,12 +6,13 @@
 #include <string>
 #include <sstream>
 
-#define ROOT_IMAGES "resources/images"
-#define LOG_FILE    "PlaneGame.log"
+#define ROOT_IMAGES         "resources/images"
+#define LOG_FILE            "PlaneGame.log"
 #define ENEMY1_DEFAULT_MOVE_DISTANCE 5
-#define LEVEL_IMAGE ROOT_IMAGES"/life.png"
-#define BOMB_IMAGE  ROOT_IMAGES"/bomb.png"
-#define BOMB_SUPPLY_IMAGE  ROOT_IMAGES"/bomb_supply.png"
+#define LEVEL_IMAGE         ROOT_IMAGES"/life.png"
+#define BOMB_IMAGE          ROOT_IMAGES"/bomb.png"
+#define BOMB_SUPPLY_IMAGE   ROOT_IMAGES"/bomb_supply.png"
+#define BULLET_SUPPLY_IMAGE ROOT_IMAGES"/bullet_supply.png"
 
 extern int fpsTick;
 extern int PGerrno;

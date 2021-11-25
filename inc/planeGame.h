@@ -9,6 +9,7 @@
 #include "font.h"
 #include "config.h"
 #include "player.h"
+#include "supply.h"
 #include "enemyPlane.h"
 #include "background.h"
 
@@ -32,10 +33,8 @@ public:
 	// 碰撞检查
 	void scanCollision();
 	void renderLevel();
-	void renderBomb();
-	void supply();
-	void renderSupply();
 	void rePlay();
+	void destroyAllEnemy();
 	// Debug
 	void showCollisionBoxs();
 private:
@@ -59,18 +58,8 @@ private:
 	Uint32 m_playerIncvDur;
 	// 玩家上一次死亡时间
 	Uint32 m_playerLastDeathT;
-	// 玩家拥有的全屏炸弹数
-	int m_fullScreenBomb;
-	// 补给间隔
-	Uint32 m_intervalOfSupply;
-	int m_bombImageW, m_bombImageH;
-	int m_bombSupplyImageW, m_bombSupplyImageH;
-	SDL_Rect m_bombRect;
-	SDL_Rect m_bombSupplyRect;
-	SDL_Texture *m_bombTexture;
-	SDL_Texture *m_bombSupplyTexture;
-	// 最后一次补给时间
-	Uint32 m_timeOfLastSupply;
+	Supply *m_supply;
+	Uint32 m_bulletSupplyToTime;
 };
 
 #endif

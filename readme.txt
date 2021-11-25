@@ -12,3 +12,7 @@ sizeof(array) / sizeof(char*)
 增加中型机被子弹击中特效
 
 增加Debug碰撞箱显示
+
+增加补给系统
+
+增加大型机
